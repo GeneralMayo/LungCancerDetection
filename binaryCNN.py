@@ -14,40 +14,71 @@ import numpy as np
 import math
 from keras import backend as K
 from keras.utils import plot_model
+import os
 
-def filter_image(image_tensor):
-    #image_tensor[0] = detect_rotation(image_tensor[0])
-    return image_tensor
+def load_data():
+    #get refference data
+    dataFolder = 'Data/ActiveData/'
 
-batch_size = 30
-minW = 160
-minH = 160
-all_image_types = ['ADC0','BVAL0','t2_tse_sag0','t2_tse_tra0']
 
-image_type = all_image_types[2]
+    trainB = []
+    trainM = []
+    testB = []
+    testM = []
+    for root, dirs, files in os.walk(dataFolder):
+        if(len(files) > 1):
+            print(root)
+            #find what data is being loaded
+            testTrain = root.split('/')[-2]
+            classType = root.split('/')[-1]
+            if(testTrain == 'Train' and classType == 'Benign'):
+                listToLoad = trainB
+            elif(testTrain == 'Train' and classType == 'Malignant'):
+                listToLoad = trainM
+            elif(testTrain == 'Test' and classType == 'Benign'):
+                listToLoad = testB
+            else:
+                listToLoad = testM
+
+            for fileName in files:
+                listToLoad.append(np.load(os.path.join(root,fileName)))
+                
+    trainData = np.array(trainB+trainM)
+    trainLabels = np.ones(len(trainB)+len(trainM))
+    trainLabels[0:len(trainB)] = np.zeros(len(trainB))
+
+    testData = np.array(testB+testM)
+    testLabels = np.ones(len(testB)+len(testM))
+    testLabels[0:len(testB)] = np.zeros(len(testB))
+
+    return trainData, trainLabels, testData, testLabels
+
+trainData, trainLabels, testData, testLabels = load_data()
+
+batch_size = 32
 
 model = Sequential()
-model.add(Conv2D(32, (7, 7), input_shape=(minH, minW, 1)))
+model.add(Conv2D(24, (5, 5), input_shape=trainData[0].shape, data_format='channels_first'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
 model.add(MaxPooling2D(pool_size=(2, 2)))
 
 
-#model.add(Conv2D(32, (3, 3))), 
-#model.add(BatchNormalization())
-#model.add(Activation('relu'))
-#model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(32, (3, 3))), 
+model.add(BatchNormalization())
+model.add(Activation('relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
 
-model.add(Conv2D(64, (3, 3)))
+model.add(Conv2D(48, (3, 3)))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
 model.add(MaxPooling2D(pool_size=(2, 2)))
 
 model.add(Flatten())  
-model.add(Dense(64))
+model.add(Dense(512))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
-model.add(Dropout(0.5))
+#model.add(Dropout(0.5))
 model.add(Dense(1))
 model.add(Activation('sigmoid'))
 
@@ -64,8 +95,8 @@ train_datagen = ImageDataGenerator(
         horizontal_flip=True,
         vertical_flip=True,
         zoom_range=0.2,
-        rotation_range=90,
-        data_format="channels_last",
+        rotation_range=40,
+        data_format="channels_first",
         rescale=1./255)
 
 test_datagen = ImageDataGenerator(
@@ -75,35 +106,31 @@ test_datagen = ImageDataGenerator(
     horizontal_flip=True,
     vertical_flip=True,
     zoom_range=0.2,
-    rotation_range=90,
-	data_format="channels_last",
+    rotation_range=40,
+	data_format="channels_first",
 	rescale=1./255)
 
 
-train_generator = train_datagen.flow_from_directory(
-        'BinaryClassificationData/Train/'+image_type,
-        color_mode="grayscale",
-        target_size=(minH, minW), 
-        batch_size=batch_size,
-        class_mode='binary')  
+train_generator = train_datagen.flow(
+        trainData,
+        trainLabels,
+        batch_size = batch_size)
 
 
-validation_generator = test_datagen.flow_from_directory(
-        'BinaryClassificationData/Test/'+image_type,
-        color_mode="grayscale",
-        target_size=(minH, minW),
-        batch_size=batch_size,
-        class_mode='binary')
+validation_generator = test_datagen.flow(
+        testData,
+        testLabels,
+        batch_size = batch_size)
 
 model.fit_generator(
         train_generator,
-        callbacks=[ModelCheckpoint('Binary_'+image_type+'.h5', monitor='val_loss', save_best_only=True),
+        callbacks=[ModelCheckpoint('BinaryCNN.h5', monitor='val_loss', save_best_only=True),
         TensorBoard(log_dir='./logs', write_graph=True, write_images=False, histogram_freq=10)],
             #EarlyStopping(monitor='val_loss', patience=4)],
-        steps_per_epoch=1500//batch_size,
-        epochs=25,
+        steps_per_epoch=20000//batch_size,
+        epochs=80,
         validation_data=validation_generator,
-        validation_steps=300//batch_size)
+        validation_steps=1000//batch_size)
 
 
 #model.save('Problem1_CNN.h5')
