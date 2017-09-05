@@ -18,28 +18,45 @@ for ttName in ttNames:
     for mbName in mbNames:
         os.mkdir(os.path.join(ACTIVE_DATA_ROOT,ttName,mbName))
 
+MB_ROOTS = [os.path.join(INACTIVE_DATA_ROOT,'Benign'),os.path.join(INACTIVE_DATA_ROOT,'Malignant')]
 #move images to test train folders
-for root, dirs, files in os.walk(INACTIVE_DATA_ROOT):
-    if(len(files)>1):
-        random.shuffle(files)
+for root in MB_ROOTS:
+    #get annotation folders (each of which contain patches)
+    allContents = os.listdir(root)
+    annotationFolders = []
+    for item in allContents:
+        if(os.path.isdir(os.path.join(root,item))):
+            annotationFolders.append(item)
 
-        splitPoint = int(round(len(files)*PERCENT_TRAIN))
-        TrainImages = files[:splitPoint]
-        TestImages = files[splitPoint:]
-        
-        #get class mapping
-        imageClass = root.split('/')[-1]
+    #split train and test annotation folders
+    random.shuffle(annotationFolders)
+    splitPoint = int(round(len(annotationFolders)*PERCENT_TRAIN))
+    TrainAnnotations = annotationFolders[:splitPoint]
+    TestAnnotations = annotationFolders[splitPoint:]
+    
+    #get image class
+    imageClass = root.split('/')[-1]
 
-        #move data
-        for fileName in TrainImages:
-            src = root+'/'+fileName
-            dst = os.path.join(ACTIVE_DATA_ROOT,'Train',imageClass,fileName)
+    #copy train files over
+    #src /PreprocessedData/ImageClass/AnnotationName/patchX.npy
+    #dst /ActiveData/Train/ImageClass/AnnotationName_FindingX_PatchX.npy
+    for annotationFolder in TrainAnnotations:
+        folderPath = os.path.join(root, annotationFolder)
+        annotationFiles = os.listdir(folderPath)
+        for fileName in annotationFiles:
+            src = os.path.join(folderPath, fileName)
+            dst = os.path.join(ACTIVE_DATA_ROOT,'Train',imageClass,annotationFolder+fileName)
             shutil.copyfile(src,dst)
 
-
-        for fileName in TestImages:
-            src = root+'/'+fileName
-            dst = os.path.join(ACTIVE_DATA_ROOT,'Test',imageClass,fileName)
+    #copy test files over
+    #src /PreprocessedData/ImageClass/AnnotationName/patchX.npy
+    #dst /ActiveData/Test/ImageClass/AnnotationName_FindingX_PatchX.npy
+    for annotationFolder in TestAnnotations:
+        folderPath = os.path.join(root, annotationFolder)
+        annotationFiles = os.listdir(folderPath)
+        for fileName in annotationFiles:
+            src = os.path.join(folderPath, fileName)
+            dst = os.path.join(ACTIVE_DATA_ROOT,'Test',imageClass,annotationFolder+fileName)
             shutil.copyfile(src,dst)
 
 
